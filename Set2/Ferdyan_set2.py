@@ -194,12 +194,6 @@ def bond_dim(psi):
         dim.append(bond[-1])
     return dim
 
-###########################################################################
-
-
-
-###########################################################################
-
 def MCMPS(psi, j):
     n = psi.ndim
     UV = [None] * n
@@ -222,10 +216,6 @@ def MCMPS(psi, j):
         UV[j] = psi_r
 
         return UV
-
-Z = np.diag([1, -1])
-X = np.array([[0, 1], [1, 0]])
-
 
 def H_MPO(psi, h, hz):
 
@@ -338,7 +328,7 @@ print("Energy of the state from H_expval function: ", H_expval(psi, H))
 print("Reference energy: ", en_H(psi, len(psi.shape),1,1))
 
 
-def DMRG(L, R, mps, mpo, s, vec):
+def DMRG(mps, mpo, s, vec):
     n = len(mps)
 
     tensor = np.reshape(vec, mps[s].shape)
@@ -362,10 +352,10 @@ def DMRG(L, R, mps, mpo, s, vec):
     return np.reshape(DMRG, -1)
 
 
-def minE(L, R, mps, H_MPO, s):
+def minE(mps, H_MPO, s):
 
     n_A = functools.reduce(lambda x, y: x * y, mps[s].shape)
-    apply = lambda x: DMRG(L, R, mps, H_MPO, s, x)
+    apply = lambda x: DMRG(mps, H_MPO, s, x)
     operator = LinearOperator((n_A, n_A), matvec = apply)
     E, x = eigsh(operator, 1, which='SA')
     x = np.reshape(x, mps[s].shape)
@@ -436,41 +426,36 @@ def minE_total(mps, mpo, reps):
 
     for j in range(reps):
 
-        R = prepare_R(mps, mpo)
         L = LH_contraction(mps, mpo, 0)
 
         for i in range(n-1):
             L = SLH_contraction(L, mps, mpo, i - 1)
-            mps = minE(L, R[i], mps, mpo, i)
+            mps = minE(mps, mpo, i)
             mps = move_center(mps, i, i + 1)
 
-        L = prepare_L(mps, mpo)
         R = RH_contraction(mps, mpo, n)
 
         for i in reversed(range(1, n)):
             R = SRH_contraction(R, mps, mpo, i)
-            mps = minE(L[i], R, mps, mpo, i)
+            mps = minE(mps, mpo, i)
             mps = move_center(mps, i, i - 1)
 
     return mps
 
 s = 0
-psi = random(6)
+psi = random(8)
 H = H_MPO(psi, 1, 1)
 
 mps = MCMPS(psi, s)
 
-enH = en_H(psi, len(psi.shape), 1, 1)
-enGS = en_GS(len(psi.shape), 1, 1)
+EH = en_H(psi, len(psi.shape), 1, 1)
+EGS = en_GS(len(psi.shape), 1, 1)
 
-# print("\nReference energies")
-
-print("Hamiltonian energy:\n", enH)
-print("\nGround state energy:\n", enGS)
+print("Energy: ", EH, "\nGround state energy: ", EGS)
 
 reps = 2
-print("\nMPS energy after %d repetitions." % reps)
 mps = minE_total(mps, H, reps)
+print("MPS energy after %d repetitions." % reps)
 print("Final energy:", HMPS_expval(mps, H, 0))
 
 E_ref = []
